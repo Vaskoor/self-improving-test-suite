@@ -1,29 +1,64 @@
 # Self-Improving Test Suite — RL + Mutation + Risk
 
-<div align="center">**A test suite that learns which tests catch real bugs, prioritizes them, generates new ones, and removes redundant ones.**</div>
+<div align="center">
 
-## What it does
-- **Mutation testing** (Stryker/PIT) measures how effective each test is at catching injected faults.
-- **Flaky detection + quarantine** — statistical flakiness scoring; chronically flaky tests auto-quarantine (run, don't gate).
-- **Risk-based selection** — uses git diff, incident history, and code embeddings to run the 18 tests that matter, not all 412.
-- **Reinforcement learning** (PyTorch PPO) optimizes test ordering + generation; reward = bugs-found / time.
-- **Dashboard**: mutation score, flaky rate, risk×mutation heatmap, slowest tests, RL policy convergence.
+**A test suite that learns which tests catch real bugs, prioritizes them, generates new ones, and removes redundant ones.**
+
+![node](https://img.shields.io/badge/node-%3E%3D20-brightgreen) ![license](https://img.shields.io/badge/license-MIT-blue)
+
+</div>
+
+## Overview
+
+A test-suit optimization platform with 4 layers:
+1. **Mutation testing** — inject faults (mutants) into code, measure which tests catch them → mutation score
+2. **Flaky detection** — run each test N times, classify stable/flaky, auto-quarantine chronic flakes
+3. **Risk-based selection** — score each test's risk from git diff overlap + incident history + code complexity
+4. **RL optimizer** — Q-learning policy: state = changed modules, action = test subset, reward = bugs-found / time
 
 ## Architecture
-| Layer | Tech |
-|-------|------|
-| Mutation | Stryker (JS/TS), PIT (Java) |
-| Flaky detection | statistical retry + historical pass/fail |
-| Risk selection | git diff + incident corpus + code embeddings (Neo4j) |
-| RL optimizer | PyTorch PPO; state = changed modules, action = test subset + order |
-| Graph | Neo4j (code↔test↔incident edges) |
-| CI | GitHub Actions matrix + dynamic test selection |
+
+```
+src/
+├── types.ts                    # TestInfo, MutationResult, FlakyResult, RiskScore, RLState, RLAction
+├── mutation/
+│   └── mutation-tester.ts      # 5 operators (flip-bool, flip-compare, change-arith, remove-stmt, off-by-one) + score
+├── flaky/
+│   └── flaky-detector.ts       # Run N times, pass-rate variance → flaky classification + quarantine
+├── risk/
+│   └── risk-scorer.ts          # Git diff + incidents + complexity → risk score 0-1 + top-N selection
+├── rl/
+│   └── rl-optimizer.ts         # Q-learning: chooseAction (epsilon-greedy) + update (Bellman) + generateActions
+└── server.ts                   # Express API: /api/mutation, /api/flaky, /api/risk, /api/rl/train
+```
+
+## API
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/health` | Liveness |
+| `GET` | `/api/status` | Mutation score, flaky rate, quarantined count, RL history, slowest tests |
+| `POST` | `/api/mutation` | Run mutation testing on code + test runners |
+| `POST` | `/api/flaky` | Detect flakiness for a test |
+| `POST` | `/api/risk` | Score + select tests by risk |
+| `POST` | `/api/rl/train` | Train the RL policy one step |
+
+## Tests
+
+```bash
+npm test    # 18 unit tests
+```
+
+- `tests/mutation.test.ts` — 9 tests: mutant generation (2) + mutation scoring (2) + flaky detection (5) + risk scoring (4) + RL optimizer (5)
 
 ## Run
+
 ```bash
-npm install && npm run dev   # → http://localhost:4301
+npm install && npm test && npm run dev   # → http://localhost:4301
 ```
-## Why it's OG
-Research-paper energy — deep testing theory + ML + CI/CD in one platform.
+
+## Stack
+Stryker · PyTorch (PPO) · Neo4j · GitHub Actions · TypeScript · Express
+
 ## License
 MIT
